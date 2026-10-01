@@ -6,7 +6,9 @@ from database import (
     add_dream,
     get_all_dreams,
     update_dream,
-    delete_dream
+    delete_dream,
+    add_analysis,
+    get_latest_analysis
 )
 
 from rag_analysis import generate_jungian_reflection
@@ -617,9 +619,18 @@ with tab2:
                                 content
                             )
 
+                            # 暫存在目前 Streamlit session
                             st.session_state[
                                 f"rag_result_{dream_id}"
                             ] = result
+
+                            # 永久存入 Database
+                            add_analysis(
+                                dream_id=dream_id,
+                                reflection=result["reflection"],
+                                concepts=result["concepts"],
+                                model_name="qwen3:1.7b"
+                            )
 
                         except Exception as e:
 
@@ -628,6 +639,24 @@ with tab2:
                             )
 
                 rag_key = f"rag_result_{dream_id}"
+
+                # 如果目前 session 沒有分析，
+                # 嘗試從 Database 載入最近一次
+                if rag_key not in st.session_state:
+
+                    saved_analysis = get_latest_analysis(
+                        dream_id
+                    )
+
+                    if saved_analysis:
+
+                        st.session_state[
+                            rag_key
+                        ] = {
+                            "reflection": saved_analysis["reflection"],
+                            "concepts": saved_analysis["concepts"]
+                        }
+
 
                 if rag_key in st.session_state:
 
