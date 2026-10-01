@@ -79,3 +79,15 @@ def update_dream(dream_id, dream_date, content, mood):
 
     conn.commit()
     conn.close()
+
+def delete_dream(dream_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM dreams WHERE id = ?",
+        (dream_id,)
+    )
+
+    conn.commit()
+    conn.close()

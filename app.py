@@ -1,5 +1,15 @@
 import streamlit as st
+from datetime import date
 
+from database import (
+    init_db,
+    add_dream,
+    get_all_dreams,
+    update_dream,
+    delete_dream
+)
+
+from rag_analysis import generate_jungian_reflection
 def apply_custom_theme():
 
     st.markdown("""
@@ -425,15 +435,6 @@ def apply_custom_theme():
     </style>
     """, unsafe_allow_html=True)
 
-from datetime import date
-from database import (
-    init_db,
-    add_dream,
-    get_all_dreams,
-    update_dream
-)
-from rag_analysis import generate_jungian_reflection
-
 # -------------------------
 # 頁面設定
 # -------------------------
@@ -551,21 +552,28 @@ with tab2:
     else:
 
         # -------------------------
-        # 小統計
+        # 統計資訊
         # -------------------------
         col1, col2 = st.columns(2)
 
         with col1:
-            st.metric("🌙 已記錄夢境", len(dreams))
+            st.metric(
+                "🌙 已記錄夢境",
+                len(dreams)
+            )
 
         with col2:
             latest_date = dreams[0][1]
-            st.metric("✨ 最近一次夢境", latest_date)
+
+            st.metric(
+                "✨ 最近一次夢境",
+                latest_date
+            )
 
         st.divider()
 
         # -------------------------
-        # 顯示所有夢境
+        # 每一筆夢境
         # -------------------------
         for dream_item in dreams:
 
@@ -579,8 +587,9 @@ with tab2:
             ):
 
                 # =========================
-                # 顯示夢境
+                # 顯示夢境內容
                 # =========================
+                st.markdown("#### 夢境內容")
                 st.write(content)
 
                 st.caption(
@@ -590,15 +599,15 @@ with tab2:
                 st.divider()
 
                 # =========================
-                # AI 榮格式 RAG 分析
+                # AI 榮格式分析
                 # =========================
                 if st.button(
-                    "🧠 AI 榮格式夢境分析",
+                    "🔮 AI 榮格式分析",
                     key=f"rag_analyze_{dream_id}"
                 ):
 
                     with st.spinner(
-                        "🌙 AI 正在搜尋相關榮格概念並分析夢境..."
+                        "正在分析夢境..."
                     ):
 
                         try:
@@ -617,9 +626,6 @@ with tab2:
                                 f"分析失敗：{e}"
                             )
 
-                # =========================
-                # 顯示 RAG 分析結果
-                # =========================
                 rag_key = f"rag_result_{dream_id}"
 
                 if rag_key in st.session_state:
@@ -629,11 +635,11 @@ with tab2:
                     ]
 
                     st.markdown(
-                        "### 🌙 AI Jungian Reflection"
+                        "### ✨ AI Jungian Reflection"
                     )
 
                     st.caption(
-                        "此內容為 AI 輔助的榮格式自我反思，"
+                        "以下內容為 AI 輔助的榮格式自我反思，"
                         "並非心理診斷，也不存在唯一正確的夢境解讀。"
                     )
 
@@ -644,13 +650,13 @@ with tab2:
 
                     # Retrieval 資訊
                     with st.expander(
-                        "🔎 AI 是根據哪些榮格概念分析的？"
+                        "🔎 查看 AI 使用的榮格概念"
                     ):
 
                         st.caption(
-                            "DreamMap 先利用 Embedding "
-                            "搜尋與此夢境語意最相關的概念，"
-                            "再將這些資料提供給 LLM。"
+                            "DreamMap 會先利用 Embedding "
+                            "找出與夢境語意最相關的榮格概念，"
+                            "再把這些資料提供給 LLM。"
                         )
 
                         for concept in result["concepts"]:
@@ -687,76 +693,182 @@ with tab2:
                 st.divider()
 
                 # =========================
-                # 編輯夢境
+                # 狀態 key
                 # =========================
-                with st.form(
-                    f"edit_form_{dream_id}"
-                ):
+                edit_key = f"show_edit_{dream_id}"
+                delete_key = f"confirm_delete_{dream_id}"
 
-                    st.write("✏️ 編輯夢境")
+                if edit_key not in st.session_state:
+                    st.session_state[edit_key] = False
 
-                    edited_date = st.date_input(
-                        "日期",
-                        value=date.fromisoformat(
-                            dream_date_value
-                        ),
-                        key=f"date_{dream_id}"
+                if delete_key not in st.session_state:
+                    st.session_state[delete_key] = False
+
+                # =========================
+                # 編輯 / 刪除按鈕
+                # =========================
+                col_action1, col_action2 = st.columns(2)
+
+                with col_action1:
+
+                    if st.button(
+                        "✏️ 編輯夢境",
+                        key=f"edit_btn_{dream_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state[
+                            edit_key
+                        ] = not st.session_state[
+                            edit_key
+                        ]
+
+                with col_action2:
+
+                    if st.button(
+                        "🗑️ 刪除夢境",
+                        key=f"delete_btn_{dream_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state[
+                            delete_key
+                        ] = True
+
+                # =========================
+                # 編輯表單
+                # =========================
+                if st.session_state[edit_key]:
+
+                    st.markdown("### ✏️ 編輯夢境")
+
+                    with st.form(
+                        f"edit_form_{dream_id}"
+                    ):
+
+                        edited_date = st.date_input(
+                            "日期",
+                            value=date.fromisoformat(
+                                dream_date_value
+                            ),
+                            key=f"date_{dream_id}"
+                        )
+
+                        edited_content = st.text_area(
+                            "夢境內容",
+                            value=content,
+                            height=180,
+                            key=f"content_{dream_id}"
+                        )
+
+                        mood_options = [
+                            "😄 開心",
+                            "🙂 平靜",
+                            "😐 普通",
+                            "😟 焦慮",
+                            "😢 難過",
+                            "😨 害怕",
+                            "😠 憤怒"
+                        ]
+
+                        edited_mood = st.selectbox(
+                            "夢裡主要的感受",
+                            mood_options,
+                            index=(
+                                mood_options.index(mood)
+                                if mood in mood_options
+                                else 2
+                            ),
+                            key=f"mood_{dream_id}"
+                        )
+
+                        save_edit = st.form_submit_button(
+                            "💾 儲存修改",
+                            use_container_width=True
+                        )
+
+                        if save_edit:
+
+                            if edited_content.strip():
+
+                                update_dream(
+                                    dream_id,
+                                    str(edited_date),
+                                    edited_content.strip(),
+                                    edited_mood
+                                )
+
+                                st.session_state[
+                                    edit_key
+                                ] = False
+
+                                st.success(
+                                    "修改成功！"
+                                )
+
+                                st.rerun()
+
+                            else:
+
+                                st.warning(
+                                    "夢境內容不能是空白。"
+                                )
+
+                # =========================
+                # 刪除確認
+                # =========================
+                if st.session_state[delete_key]:
+
+                    st.warning(
+                        "確定要刪除這筆夢境嗎？此操作無法復原。"
                     )
 
-                    edited_content = st.text_area(
-                        "夢境內容",
-                        value=content,
-                        height=150,
-                        key=f"content_{dream_id}"
-                    )
+                    confirm_col1, confirm_col2 = st.columns(2)
 
-                    mood_options = [
-                        "😄 開心",
-                        "🙂 平靜",
-                        "😐 普通",
-                        "😟 焦慮",
-                        "😢 難過",
-                        "😨 害怕",
-                        "😠 憤怒"
-                    ]
+                    with confirm_col1:
 
-                    edited_mood = st.selectbox(
-                        "夢裡主要的感受",
-                        mood_options,
-                        index=(
-                            mood_options.index(mood)
-                            if mood in mood_options
-                            else 2
-                        ),
-                        key=f"mood_{dream_id}"
-                    )
+                        if st.button(
+                            "✅ 確定刪除",
+                            key=f"confirm_delete_btn_{dream_id}",
+                            use_container_width=True
+                        ):
 
-                    save_edit = st.form_submit_button(
-                        "💾 儲存修改"
-                    )
+                            delete_dream(
+                                dream_id
+                            )
 
-                    if save_edit:
+                            st.session_state.pop(
+                                delete_key,
+                                None
+                            )
 
-                        if edited_content.strip():
+                            st.session_state.pop(
+                                edit_key,
+                                None
+                            )
 
-                            update_dream(
-                                dream_id,
-                                str(edited_date),
-                                edited_content.strip(),
-                                edited_mood
+                            st.session_state.pop(
+                                f"rag_result_{dream_id}",
+                                None
                             )
 
                             st.success(
-                                "修改成功！"
+                                "夢境已刪除。"
                             )
 
                             st.rerun()
 
-                        else:
+                    with confirm_col2:
 
-                            st.warning(
-                                "夢境內容不能是空白。"
-                            )
+                        if st.button(
+                            "取消",
+                            key=f"cancel_delete_btn_{dream_id}",
+                            use_container_width=True
+                        ):
+
+                            st.session_state[
+                                delete_key
+                            ] = False
+
+                            st.rerun()
 
 # ==================================================
 # Tab 3：AI 搜尋
@@ -795,3 +907,15 @@ with tab4:
     )
 
     st.write("🌌 Dream Galaxy 即將加入")
+
+def delete_dream(dream_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM dreams WHERE id = ?",
+        (dream_id,)
+    )
+
+    conn.commit()
+    conn.close()
