@@ -1,4 +1,6 @@
 import streamlit as st
+import plotly.express as px
+
 from datetime import date
 
 from database import (
@@ -13,6 +15,8 @@ from database import (
 
 from rag_analysis import generate_jungian_reflection
 from semantic_search import search_similar_dreams
+from dream_galaxy import build_dream_galaxy
+
 def apply_custom_theme():
 
     st.markdown("""
@@ -1010,27 +1014,120 @@ with tab3:
                         )
 
 # ==================================================
-# Tab 4：夢境地圖
+# Tab 4：Dream Galaxy
 # ==================================================
 with tab4:
 
     st.subheader("✨ Dream Galaxy")
 
-    st.info(
-        "之後所有夢境都會變成地圖上的點，"
-        "內容越相似的夢，會彼此靠得越近。"
+    st.caption(
+        "每一顆星代表一個夢。"
+        "語意越相似的夢，在地圖上通常會彼此靠得越近。"
     )
 
-    st.write("🌌 Dream Galaxy 即將加入")
+    dreams = get_all_dreams()
 
-def delete_dream(dream_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+    if len(dreams) < 2:
 
-    cursor.execute(
-        "DELETE FROM dreams WHERE id = ?",
-        (dream_id,)
-    )
+        st.info(
+            "至少需要 2 筆夢境才能建立 Dream Galaxy 🌙"
+        )
 
-    conn.commit()
-    conn.close()
+    else:
+
+        with st.spinner(
+            "正在將夢境投影到夢境宇宙..."
+        ):
+
+            galaxy_df = build_dream_galaxy(
+                dreams
+            )
+
+        # -------------------------
+        # 小統計
+        # -------------------------
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "🌙 Galaxy Dreams",
+                len(galaxy_df)
+            )
+
+        with col2:
+            mood_count = (
+                galaxy_df["mood"]
+                .nunique()
+            )
+
+            st.metric(
+                "✨ Emotion Types",
+                mood_count
+            )
+
+        st.divider()
+
+        # -------------------------
+        # Plotly Galaxy
+        # -------------------------
+        fig = px.scatter(
+            galaxy_df,
+            x="x",
+            y="y",
+            color="mood",
+            hover_name="date",
+            hover_data={
+                "content": True,
+                "id": True,
+                "x": False,
+                "y": False
+            }
+        )
+
+        fig.update_traces(
+            marker=dict(
+                size=18,
+                opacity=0.85,
+                line=dict(
+                    width=1
+                )
+            )
+        )
+
+        fig.update_layout(
+            template="plotly_dark",
+
+            height=650,
+
+            margin=dict(
+                l=20,
+                r=20,
+                t=40,
+                b=20
+            ),
+
+            xaxis=dict(
+                visible=False
+            ),
+
+            yaxis=dict(
+                visible=False
+            ),
+
+            paper_bgcolor="rgba(0,0,0,0)",
+
+            plot_bgcolor="rgba(0,0,0,0)",
+
+            legend_title_text="夢境情緒"
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+        st.caption(
+            "💡 Dream Galaxy 使用 Embedding 表示夢境語意，"
+            "再透過 PCA 將高維向量投影為二維座標。"
+            "位置代表語意上的相對關係，不代表心理診斷。"
+        )
