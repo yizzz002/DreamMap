@@ -10,6 +10,7 @@ from database import (
 )
 
 from rag_analysis import generate_jungian_reflection
+from semantic_search import search_similar_dreams
 def apply_custom_theme():
 
     st.markdown("""
@@ -292,7 +293,7 @@ def apply_custom_theme():
             rgba(255,255,255,0.045) !important;
 
         color:
-            #F7F7FF !important;
+            #00000 !important;
 
         border:
             1px solid rgba(167,139,250,0.16) !important;
@@ -871,28 +872,113 @@ with tab2:
                             st.rerun()
 
 # ==================================================
-# Tab 3：AI 搜尋
+# Tab 3：AI 洞察 / Semantic Search
 # ==================================================
 with tab3:
 
-    st.subheader("🔍 AI 夢境搜尋")
+    st.subheader("🔮 AI 夢境搜尋")
 
-    st.info(
-        "下一步我們會讓 AI 理解夢境的語意，"
-        "讓你可以搜尋「迷路」、「朋友」、「學校」等相關夢境。"
+    st.caption(
+        "不用記得夢裡的原句，只要描述你想尋找的情境，"
+        "DreamMap 會依照語意找出最相似的過去夢境。"
     )
 
     search_text = st.text_input(
-        "你想找什麼樣的夢？",
-        placeholder="例如：我以前有沒有夢過迷路？",
-        disabled=True
+        "想尋找什麼樣的夢？",
+        placeholder="例如：我以前有沒有夢過迷路或找不到方向？"
     )
 
-    st.button(
+    top_k = st.slider(
+        "顯示幾筆最相關夢境",
+        min_value=1,
+        max_value=5,
+        value=3
+    )
+
+    search_button = st.button(
         "🔍 搜尋夢境",
-        disabled=True
+        use_container_width=True
     )
 
+    if search_button:
+
+        if not search_text.strip():
+
+            st.warning(
+                "請先輸入想搜尋的內容。"
+            )
+
+        else:
+
+            dreams = get_all_dreams()
+
+            if len(dreams) == 0:
+
+                st.info(
+                    "目前還沒有可以搜尋的夢境。"
+                )
+
+            else:
+
+                with st.spinner(
+                    "正在理解你的搜尋內容..."
+                ):
+
+                    results = search_similar_dreams(
+                        search_text.strip(),
+                        dreams,
+                        top_k=top_k
+                    )
+
+                st.markdown("### ✨ 最相似的夢境")
+
+                for index, result in enumerate(
+                    results,
+                    start=1
+                ):
+
+                    # Cosine similarity 顯示用
+                    display_score = max(
+                        0,
+                        min(1, result["score"])
+                    )
+
+                    with st.container(
+                        border=True
+                    ):
+
+                        col1, col2 = st.columns(
+                            [4, 1]
+                        )
+
+                        with col1:
+
+                            st.markdown(
+                                f"#### {index}. 🌙 {result['date']}"
+                            )
+
+                            st.caption(
+                                result["mood"]
+                            )
+
+                        with col2:
+
+                            st.metric(
+                                "語意相關度",
+                                f"{display_score:.0%}"
+                            )
+
+                        st.progress(
+                            display_score
+                        )
+
+                        st.write(
+                            result["content"]
+                        )
+
+                        st.caption(
+                            f"Dream ID：{result['id']}"
+                        )
 
 # ==================================================
 # Tab 4：夢境地圖
