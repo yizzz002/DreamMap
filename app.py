@@ -1,5 +1,9 @@
 import streamlit as st
 import plotly.express as px
+from base64 import b64encode
+from pathlib import Path
+from html import escape
+from textwrap import wrap
 
 from datetime import date
 
@@ -1070,29 +1074,61 @@ with tab4:
         # -------------------------
         # Plotly Galaxy
         # -------------------------
+        galaxy_df = galaxy_df.copy()
+        galaxy_df["hover_content"] = galaxy_df["content"].map(
+            lambda content: "<br>".join(
+                escape(line) for line in wrap(str(content), width=20)
+            )
+        )
         fig = px.scatter(
             galaxy_df,
             x="x",
             y="y",
             color="mood",
-            hover_name="date",
-            hover_data={
-                "content": True,
-                "id": True,
-                "x": False,
-                "y": False
-            }
+            color_discrete_sequence=[
+                "#dedede", "#929292", "#bcbcbc", "#747474",
+                "#eeeeee", "#a6a6a6", "#cccccc", "#828282"
+            ],
+            custom_data=["date", "mood", "hover_content", "id"]
         )
 
         fig.update_traces(
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "情緒：%{customdata[1]}<br><br>"
+                "%{customdata[2]}<br><br>"
+                "夢境 ID：%{customdata[3]}<extra></extra>"
+            ),
             marker=dict(
-                size=18,
-                opacity=0.85,
+                size=5,
+                opacity=0.95,
                 line=dict(
-                    width=1
+                    width=0
                 )
             )
         )
+
+        # Draw translucent halos behind the stars; legend toggles hide both.
+        star_traces = tuple(fig.data)
+        for size, opacity in [(24, 0.06), (18, 0.10), (12, 0.18), (8, 0.28)]:
+            for trace in star_traces:
+                fig.add_trace(type(trace)(
+                    x=trace.x,
+                    y=trace.y,
+                    xaxis=trace.xaxis,
+                    yaxis=trace.yaxis,
+                    mode="markers",
+                    marker=dict(
+                        size=size,
+                        color=trace.marker.color,
+                        opacity=opacity,
+                        line=dict(width=0)
+                    ),
+                    legendgroup=trace.legendgroup,
+                    showlegend=False,
+                    hoverinfo="skip"
+                ))
+        fig.data = fig.data[len(star_traces):] + star_traces
 
         fig.update_layout(
             template="plotly_dark",
@@ -1114,16 +1150,40 @@ with tab4:
                 visible=False
             ),
 
-            paper_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="#050505",
 
+            # Let the paper-referenced starfield show through the plot area.
             plot_bgcolor="rgba(0,0,0,0)",
 
-            legend_title_text="夢境情緒"
+            font=dict(color="#dedede"),
+            hoverlabel=dict(
+                bgcolor="#101827",
+                bordercolor="#334155",
+                font=dict(size=12, color="#eeeeee"),
+                align="left"
+            ),
+            legend=dict(
+                title_text="夢境情緒",
+                bgcolor="rgba(0,0,0,0)",
+                groupclick="togglegroup",
+                itemsizing="trace"
+            )
+        )
+
+        # Paper coordinates keep the decorative stars fixed while zooming.
+        starfield = Path(__file__).with_name("assets") / "galaxy-background.svg"
+        fig.add_layout_image(
+            source="data:image/svg+xml;base64," + b64encode(starfield.read_bytes()).decode(),
+            xref="paper", yref="paper",
+            x=0, y=1, sizex=1, sizey=1,
+            sizing="stretch", layer="below",
+            xanchor="left", yanchor="top"
         )
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            width="stretch",
+            theme=None
         )
 
         st.caption(
